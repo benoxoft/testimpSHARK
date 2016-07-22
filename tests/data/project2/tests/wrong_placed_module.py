@@ -1,0 +1,2 @@
+class WrongPlaceModule(objects):
+	pass
