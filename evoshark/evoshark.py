@@ -19,6 +19,7 @@ else:
 from .mongomodel import File, Project, Commit, TestState
 from .common import get_all_immidiate_folders, setup_logging
 
+
 class EvoSHARK(object):
 
     def __init__(self, output, url, db_database, db_hostname, db_port, db_auth, db_user, db_password, mock_paths):
@@ -81,20 +82,6 @@ class EvoSHARK(object):
         except DoesNotExist:
             self.logger.error("Commit with project_id %s and revision %s does not exist" % (project_id, revision_hash))
             sys.exit(1)
-
-    '''
-    def get_tests_path(self, input_path):
-        if os.path.isdir(os.path.join(input_path, 'test')):
-            test_path = os.path.join(input_path, 'test')
-        elif os.path.isdir(os.path.join(input_path, 'tests')):
-            test_path = os.path.join(input_path, 'tests')
-        else:
-            self.logger.error('Tests are not located at test or tests, or no tests are there.')
-            sys.exit(1)
-
-        self.logger.info("Found test path at: %s" % test_path)
-        return test_path
-    '''
 
     def find_stored_files(self, input_path):
         # get all stored files of the project
@@ -287,6 +274,7 @@ class EvoSHARK(object):
             if 'mock' in name or 'unittest.mock' in name:
                 uses_mock = True
                 mocked_modules = self.get_what_is_mocked(file, input_path, current_files)
+
             if mod.__file__ is not None and mod.__file__.startswith(input_path) and mod.__file__ != file \
                     and mod.__file__ not in direct_imports_files:
                 modules.append(mod)
@@ -397,7 +385,6 @@ class EvoSHARK(object):
             for item in current_files:
                 item_parts = item.split('/')
                 part_path_parts = part_path.split('/')
-
                 if item.endswith(part_path) and item_parts[-1] == part_path_parts[-1]:
                     module_identifier = '.'.join(parts[0:i])
                     return Module(name=module_identifier, file=item)

@@ -47,28 +47,6 @@ class MyTestCase(unittest.TestCase):
         expected_set.append('BadCommand4')
         self.assertListEqual(m2, expected_set)
 
-        with open(self.file1_path, 'r') as f:
-            contents = f.readlines()
-
-        new_contents = []
-        for i in range(len(contents)):
-            new_line = ""
-            line = contents[i]
-
-            if line.startswith('from'):
-                new_line += line.strip()+' '
-                for next_line in contents[i+1:len(contents)]:
-                    if next_line.startswith('from') or next_line.startswith('import'):
-                        break
-                    elif not next_line.strip():
-                        break
-                    else:
-                        new_line += next_line.strip()+' '
-                new_contents.append(new_line)
-
-
-        for line in new_contents:
-            print(line)
 
 if __name__ == '__main__':
     unittest.main()

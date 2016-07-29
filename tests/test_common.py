@@ -8,7 +8,7 @@ class CommonTest(unittest.TestCase):
     def test_get_all_immediate_folders(self):
         self.assertTrue(self.checkEqual(
             get_all_immidiate_folders(os.path.dirname(os.path.realpath(__file__))+"/data"),
-            ['project1', 'project2']
+            ['project1', 'project2', 'mock_detection']
         ))
 
     def checkEqual(self, L1, L2):

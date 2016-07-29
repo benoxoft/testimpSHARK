@@ -102,14 +102,8 @@ def start():
 
     logger.info("Copying and setting all versions")
 
-    skip = True
     for revision in repository.get_all_versions():
         logger.info("Executing on revision: %s" % revision)
-        if revision == 'ce20170fbf2ce280e008ea467b917a1c86f6beea':
-            skip = False
-
-        if skip:
-            continue
 
         path_to_revision_dump = os.path.join(config.output_dir, 'rev', revision)
 
@@ -127,7 +121,6 @@ def start():
             logger.error("Key error for revision %s." % revision)
             continue
         execute(config, logger, revision, path_to_revision_dump)
-
 
 
 

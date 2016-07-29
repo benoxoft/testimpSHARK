@@ -1,12 +1,16 @@
 import unittest
 import json
 import os
+import sys
 from modulefinder import ModuleFinder, Module
 
+from modulegraph.modulegraph import ModuleGraph, Package, SourceModule
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 
+from evoshark.common import get_all_immidiate_folders
 from evoshark.evoshark import EvoSHARK
+from evoshark.newmodulefinder.newmodulefinder_python35 import NewModuleFinder
 
 
 class EvoSHARKTest(unittest.TestCase):
@@ -28,25 +32,156 @@ class EvoSHARKTest(unittest.TestCase):
         output_dir = os.path.realpath(__file__)+read_config['output_dir']
 
         cls.prepare_database(read_config['url'], read_config['db_database'], read_config['db_hostname'],
-                              read_config['db_port'], read_config['db_auth'], read_config['db_user'],
-                              read_config['db_password'])
-
+                             read_config['db_port'], read_config['db_auth'], read_config['db_user'],
+                             read_config['db_password'])
+        cls.mock_paths = cls.get_mock_paths(cls)
         cls.evo_shark = EvoSHARK(output_dir, read_config['url'], read_config['db_database'],
-                                  read_config['db_hostname'], read_config['db_port'], read_config['db_auth'],
-                                  read_config['db_user'], read_config['db_password'])
-        cls.project1_path = os.path.dirname(os.path.realpath(__file__))+"/../tests/data/project1"
-        cls.project2_path = os.path.dirname(os.path.realpath(__file__))+"/../tests/data/project2"
+                                 read_config['db_hostname'], read_config['db_port'], read_config['db_auth'],
+                                 read_config['db_user'], read_config['db_password'], cls.mock_paths)
 
-        cls.path_to_main_program_root = os.path.dirname(os.path.realpath(__file__))+"/../"
+        cls.project2_path = os.path.abspath(os.path.dirname(os.path.realpath(__file__))+"/../tests/data/project2")
+
+        cls.path_to_main_program_root = os.path.abspath(os.path.dirname(os.path.realpath(__file__))+"/../")
         cls.path_to_module_of_project2 = os.path.join(cls.project2_path, 'module')
-
-        cls.path_to_tests_of_project_1 = os.path.join(cls.project1_path, 'test')
         cls.path_to_tests_of_project_2 = os.path.join(cls.project2_path, 'tests')
 
-    def test_get_tests_path(self):
-        self.assertEqual(self.evo_shark.get_tests_path(self.project1_path), self.path_to_tests_of_project_1)
-        self.assertEqual(self.evo_shark.get_tests_path(self.project2_path), self.path_to_tests_of_project_2)
+        cls.path_for_search = [cls.path_to_main_program_root]
 
+        cls.path_for_search.extend(cls.mock_paths)
+        cls.path_to_test_1 = os.path.abspath(os.path.join(cls.path_to_tests_of_project_2, 'test1.py'))
+        cls.path_to_test_2 = os.path.abspath(os.path.join(cls.path_to_tests_of_project_2, 'test2.py'))
+        cls.path_to_test_3 = os.path.abspath(os.path.join(cls.path_to_tests_of_project_2, 'test3.py'))
+        cls.path_to_test_4 = os.path.abspath(os.path.join(cls.path_to_tests_of_project_2, 'test4.py'))
+        cls.path_to_test_5 = os.path.abspath(os.path.join(cls.path_to_tests_of_project_2, 'test5.py'))
+
+        cls.current_files = cls.evo_shark.get_all_files_in_current_revision(cls.path_to_main_program_root)
+
+
+    def get_mock_paths(self):
+        mock_paths = []
+        for path in sys.path:
+            if os.path.isdir(path):
+                folders = get_all_immidiate_folders(path)
+                if 'mock' in folders:
+                    mock_paths.append(os.path.join(path, 'mock'))
+        return mock_paths
+
+    def test_get_direct_imports(self):
+        new_finder = NewModuleFinder(self.path_for_search)
+        direct_imports = self.evo_shark.get_direct_imports(new_finder, self.path_to_test_1, self.project2_path)
+        expected_modules = [
+            # first, all init.py must be there
+            Module('tests.data.project2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/__init__.py'),
+            Module('tests.data.project2.module', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/__init__.py'),
+            Module('tests.data.project2.module.package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/__init__.py'),
+            Module('tests.data.project2.module.package1.sub_package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/__init__.py'),
+            Module('tests.data.project2.module.package2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package2/__init__.py'),
+
+            # Now the other modules
+            Module('tests.data.project2.module.package1.sub_package1.module1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/module1.py'),
+            Module('tests.data.project2.module.package1.module2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/module2.py'),
+            Module('tests.data.project2.module.package2.module3', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package2/module3.py'),
+        ]
+
+        self.assertTrue(self.checkEqualModuleList(direct_imports, expected_modules))
+
+    def test_get_dep_modules(self):
+        finder = ModuleFinder(self.path_for_search)
+        new_finder = NewModuleFinder(self.path_for_search)
+        modules, direct_imports, uses_mock, mocked_modules = \
+            self.evo_shark.get_dep_modules(finder, new_finder, self.path_to_test_1, self.project2_path, self.current_files)
+
+        expected_direct_imports = [
+            # first, all init.py must be there
+            Module('tests.data.project2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/__init__.py'),
+            Module('tests.data.project2.module', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/__init__.py'),
+            Module('tests.data.project2.module.package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/__init__.py'),
+            Module('tests.data.project2.module.package1.sub_package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/__init__.py'),
+            Module('tests.data.project2.module.package2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package2/__init__.py'),
+
+            # Now the other modules
+            Module('tests.data.project2.module.package1.sub_package1.module1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/module1.py'),
+            Module('tests.data.project2.module.package1.module2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/module2.py'),
+            Module('tests.data.project2.module.package2.module3', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package2/module3.py'),
+        ]
+
+        expected_modules = [
+            Module('tests.data.project2.module.package2.module4', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package2/module4.py')
+        ]
+
+        self.assertTrue(self.checkEqualModuleList(direct_imports, expected_direct_imports))
+        self.assertTrue(self.checkEqualModuleList(modules, expected_modules))
+        self.assertFalse(uses_mock)
+        self.assertFalse(mocked_modules)
+
+    def test_get_what_is_mocked(self):
+        # go through test 2 - test 5, which all mock module3 but differently
+        mocked_test_2 = self.evo_shark.get_what_is_mocked(self.path_to_test_2, self.project2_path, self.current_files)
+        mocked_test_3 = self.evo_shark.get_what_is_mocked(self.path_to_test_3, self.project2_path, self.current_files)
+        mocked_test_4 = self.evo_shark.get_what_is_mocked(self.path_to_test_4, self.project2_path, self.current_files)
+        mocked_test_5 = self.evo_shark.get_what_is_mocked(self.path_to_test_5, self.project2_path, self.current_files)
+
+        expected_mocked_module = set([Module('tests.data.project2.module.package2.module3', 'tests/data/project2/module/package2/module3.py')])
+        self.assertTrue(self.checkEqualModuleList(mocked_test_2, expected_mocked_module))
+        self.assertTrue(self.checkEqualModuleList(mocked_test_3, expected_mocked_module))
+        self.assertTrue(self.checkEqualModuleList(mocked_test_4, expected_mocked_module))
+        self.assertTrue(self.checkEqualModuleList(mocked_test_5, expected_mocked_module))
+
+
+    def test_get_dependencies_with_mock_cutoff(self):
+        # go throught test 2 - test 5, which all mock module3 but differently
+        graph = ModuleGraph(self.path_for_search)
+
+        expected_mock_cutoff = [
+            Package('tests.data.project2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/__init__.py'),
+            Package('tests.data.project2.module', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/__init__.py'),
+            Package('tests.data.project2.module.package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/__init__.py'),
+            Package('tests.data.project2.module.package1.sub_package1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/__init__.py'),
+            SourceModule('tests.data.project2.module.package1.module2', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/module2.py'),
+            SourceModule('tests.data.project2.module.package1.sub_package1.module1', '/home/ftrauts/Arbeit/smartshark2.0/unit_integration_python/tests/data/project2/module/package1/sub_package1/module1.py'),
+        ]
+        mock_cutoff_test_2 = self.evo_shark.get_dependencies_with_mock_cutoff(graph, self.path_to_test_2, self.project2_path,
+                                                                              ['tests.data.project2.module.package2.module3'])
+        mock_cutoff_test_3 = self.evo_shark.get_dependencies_with_mock_cutoff(graph, self.path_to_test_3, self.project2_path,
+                                                                              ['tests.data.project2.module.package2.module3'])
+        mock_cutoff_test_4 = self.evo_shark.get_dependencies_with_mock_cutoff(graph, self.path_to_test_4, self.project2_path,
+                                                                              ['tests.data.project2.module.package2.module3'])
+        mock_cutoff_test_5 = self.evo_shark.get_dependencies_with_mock_cutoff(graph, self.path_to_test_5, self.project2_path,
+                                                                              ['tests.data.project2.module.package2.module3'])
+
+        self.assertTrue(self.checkEqualModuleListFromModulegraph(mock_cutoff_test_2, expected_mock_cutoff))
+        self.assertTrue(self.checkEqualModuleListFromModulegraph(mock_cutoff_test_3, expected_mock_cutoff))
+        self.assertTrue(self.checkEqualModuleListFromModulegraph(mock_cutoff_test_4, expected_mock_cutoff))
+        self.assertTrue(self.checkEqualModuleListFromModulegraph(mock_cutoff_test_5, expected_mock_cutoff))
+
+
+
+    def checkEqualModuleList(self, L1, L2):
+        sorted_l1 = sorted(L1, key=lambda x: x.__file__)
+        sorted_l2 = sorted(L2, key=lambda x: x.__file__)
+
+        if len(sorted_l1) != len(sorted_l2):
+            return False
+
+        for i in range(0, len(sorted_l1)):
+            if sorted_l1[i].__name__ != sorted_l2[i].__name__ or sorted_l1[i].__file__ != sorted_l2[i].__file__:
+                return False
+
+        return True
+
+    def checkEqualModuleListFromModulegraph(self, L1, L2):
+        sorted_l1 = sorted(L1, key=lambda x: x.filename)
+        sorted_l2 = sorted(L2, key=lambda x: x.filename)
+
+        if len(sorted_l1) != len(sorted_l2):
+            return False
+
+        for i in range(0, len(sorted_l1)):
+            if sorted_l1[i].identifier != sorted_l2[i].identifier or sorted_l1[i].filename != sorted_l2[i].filename:
+                return False
+
+        return True
+    '''
     def test_is_unit_test(self):
         finder = ModuleFinder([self.path_to_main_program_root])
         file = os.path.join(self.path_to_tests_of_project_2, "test_unit.py")
@@ -126,89 +261,5 @@ class EvoSHARKTest(unittest.TestCase):
         self.assertTrue(self.checkModulesListEqual(modules, detected_modules))
 
     '''
-    deprecated
-
-    def test_sanitize_references(self):
-        first_node = Node('unittest.loader')
-        second_node = MissingModule('tests.data.readme_expected')
-        second_node = SourceModule('tests.data.readme_expected2')
-
-        references = [first_node, second_node]
-        folders = ['tests', 'module', 'module2', 'some_value']
-
-        sanitized_references = self.evo_shark.sanitize_references(references, folders)
-
-        self.assertEqual(sanitized_references, [SourceModule('tests.data.readme_expected2')])
-
-    def test_is_ref_in_folders(self):
-        folders = ['test', 'module', 'module2', 'some_value']
-        first_node = Node('unittest.loader')
-        second_node = Node('tests.data.readme_expected')
-        third_node = Node('test.data.readme_expected')
-        missing_module = MissingModule('test.missing.module')
-
-        self.assertFalse(self.evo_shark.is_ref_in_folders(first_node, folders))
-        self.assertFalse(self.evo_shark.is_ref_in_folders(second_node, folders))
-        self.assertTrue(self.evo_shark.is_ref_in_folders(third_node, folders))
-        self.assertTrue(self.evo_shark.is_ref_in_folders(missing_module, folders))
-
-    def test_is_unit_test(self):
-        graph = ModuleGraph([self.path_to_main_program_root])
-        folders = ['module', 'tests']
-        file = os.path.join(self.path_to_tests_of_project_2, "test_unit.py")
-        tests_path = self.path_to_tests_of_project_2
-
-        self.assertTrue(self.evo_shark.is_unit_test(graph, file, folders, tests_path))
-
-    def test_is_unit_test_negative_1(self):
-        graph = ModuleGraph([self.path_to_main_program_root])
-        folders = ['module', 'tests']
-        file = os.path.join(self.path_to_tests_of_project_2, "test_non_unit.py")
-        tests_path = self.path_to_tests_of_project_2
-
-        self.assertTrue(self.evo_shark.is_unit_test(graph, file, folders, tests_path))
-
-    def test_is_unit_test_negative_2(self):
-        graph = ModuleGraph([self.path_to_main_program_root])
-        folders = ['module', 'tests']
-        file = os.path.join(self.path_to_tests_of_project_2, "test_non_unit2.py")
-        tests_path = self.path_to_tests_of_project_2
-
-        self.assertTrue(self.evo_shark.is_unit_test(graph, file, folders, tests_path))
-
-    def test_get_all_node_references(self):
-        graph = ModuleGraph([self.path_to_main_program_root])
-        node = graph.run_script(os.path.join(self.path_to_module_of_project2, "module3.py"))
-        references = []
-        self.evo_shark.get_all_node_references(graph, node, references)
-
-        module4 = SourceModule('tests.data.project2.module.module4',
-                               os.path.join(self.path_to_module_of_project2, 'module4.py'))
-        module5 = SourceModule('tests.data.project2.module.module5',
-                               os.path.join(self.path_to_module_of_project2, 'module5.py'))
-        module6 = SourceModule('tests.data.project2.module.module6',
-                               os.path.join(self.path_to_module_of_project2, 'module6.py'))
-        data_package = Package('tests.data.project2.module',
-                               os.path.join(self.path_to_module_of_project2, '__init__.py'), [self.path_to_module_of_project2])
-
-        tests_package = Package('tests', os.path.join(self.path_to_main_program_root, 'tests', '__init__.py'),
-                                [os.path.join(self.path_to_main_program_root, 'tests')])
-        data_namespace = NamespacePackage('tests.data.project2', '-',
-                                          [os.path.join(self.path_to_main_program_root, 'tests', 'data', 'project2')])
-        data2_namespace = NamespacePackage('tests.data', '-',
-                                           [os.path.join(self.path_to_main_program_root, 'tests', 'data')])
-
-
-
-        expected_references=[module4, module5, module6, data_package, tests_package, data_namespace, data2_namespace]
-
-        self.assertTrue(self.checkEqual(references, expected_references))
-
-
-    def checkEqual(self, L1, L2):
-        return len(L1) == len(L2) and sorted(L1) == sorted(L2)
-    '''
-
-
 if __name__ == '__main__':
     unittest.main()

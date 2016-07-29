@@ -1,2 +1,0 @@
-class WrongPlaceModule(objects):
-	pass
