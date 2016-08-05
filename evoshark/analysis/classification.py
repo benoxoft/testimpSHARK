@@ -136,7 +136,9 @@ def get_unit_test_developer_think_are_unit(project):
     dep_files_unit = File.objects(Q(projectId=project.id) &
                                   Q(path__not__contains='__init__.py') &
                                   Q(name__icontains='test') & Q(path__endswith='.py') &
-                                  Q(path__icontains='unit')).only('id', 'path').all()
+                                  Q(path__not__contains='functional') & Q(path__not__contains='support') &
+                                  (Q(path__icontains='utest') |
+                                  Q(path__icontains='unit'))).only('id', 'path').all()
     for file in dep_files_unit:
         print(file.path)
     unit_by_path = set([file.id for file in dep_files_unit])
@@ -223,9 +225,7 @@ def condense_results_for_plot(condensed_plot, results):
                 del results[result_name]
 
 
-def get_overview_data(proj):
-    commits = Commit.objects(projectId=proj.id).order_by('+committerDate').only('id', 'committerDate', 'revisionHash',
-                                                                            'message', 'fileActionIds').all()
+def get_overview_data(proj, commits):
     commit_ids = [commit.id for commit in commits]
     test_states = TestState.objects(commit_id__in=commit_ids).count()
     file_actions = FileAction.objects(projectId=proj.id).count()
@@ -239,22 +239,20 @@ def get_overview_data(proj):
 
 # Measure execution time
 start_time = timeit.default_timer()
-connect('smartshark_hpc_speed', host='141.5.100.156', port=27017, authentication_source='admin', username='root',
+#connect('smartshark_hpc_speed', host='141.5.100.156', port=27017, authentication_source='admin', username='root',
+#        password='balla1234$')
+connect('smartshark', host='141.5.100.156', port=27017, authentication_source='admin', username='root',
         password='balla1234$')
-
 #proj = Project.objects(url="https://github.com/pypa/pip").get()
 #proj = Project.objects(url="https://github.com/numenta/nupic").get()
 #proj = Project.objects(url="https://github.com/ansible/ansible").get()
-proj = Project.objects(url="https://github.com/scikit-learn/scikit-learn").get()
-
-#connect('smartshark', host='141.5.100.156', port=27017, authentication_source='admin', username='root',
-#        password='balla1234$')
-# proj = Project.objects(url="https://github.com/kevin1024/vcrpy").get()
+#proj = Project.objects(url="https://github.com/scikit-learn/scikit-learn").get()
+#proj = Project.objects(url="https://github.com/kevin1024/vcrpy").get()
 #proj = Project.objects(url="https://github.com/nose-devs/nose").get()
 #proj = Project.objects(url="https://github.com/nose-devs/nose2").get()
 #proj = Project.objects(url="https://github.com/pypa/warehouse").get()
 #proj = Project.objects(url="https://github.com/aws/aws-cli").get()
-#proj = Project.objects(url="https://github.com/robotframework/robotframework").get()
+proj = Project.objects(url="https://github.com/robotframework/robotframework").get()
 
 
 condensed_plot = True
@@ -264,14 +262,18 @@ condensed_plot = True
 #commits = Commit.objects(projectId=proj.id, branches='refs/heads/devel').order_by('+committerDate')\
 #   .only('id', 'committerDate', 'revisionHash', 'message', 'fileActionIds')
 
-# For pip, nupic, scikitlearn, vcrpy, nose, nose2
+# For aws-cli
+#commits = Commit.objects(projectId=proj.id, branches='refs/remotes/origin/master').order_by('+committerDate')\
+#    .only('id', 'committerDate', 'revisionHash', 'message', 'fileActionIds')
+
+# For pip, nupic, scikitlearn, vcrpy, nose, nose2, warehouse, robotframework
 commits = Commit.objects(projectId=proj.id, branches='refs/heads/master').order_by('+committerDate')\
-    .only('id', 'committerDate', 'revisionHash', 'message', 'fileActionIds')
+   .only('id', 'committerDate', 'revisionHash', 'message', 'fileActionIds')
 
-#commits = Commit.objects(projectId=proj.id).order_by('+committerDate').only('id', 'committerDate', 'revisionHash',
-#                                                                            'message', 'fileActionIds')
 
-#get_overview_data(proj)
+
+#get_overview_data(proj, commits)
+
 
 #changes_per_commit(commits)
 #commits_per_day(proj)
@@ -279,8 +281,9 @@ commits = Commit.objects(projectId=proj.id, branches='refs/heads/master').order_
 #tests_per_commit(commits)
 
 
-#file_ids_of_unit_tests = get_unit_test_developer_think_are_unit(proj)
-file_ids_of_unit_tests= get_unit_test_developer_think_are_unit_scikit_learn(proj)
+file_ids_of_unit_tests = get_unit_test_developer_think_are_unit(proj)
+#file_ids_of_unit_tests= get_unit_test_developer_think_are_unit_scikit_learn(proj)
+
 
 text = []
 results = {
@@ -306,7 +309,7 @@ istqb_filter_files = File.objects(Q(projectId=proj.id) & Q(path__not__contains='
                                      Q(path__not__contains='helper') & Q(path__not__contains='error') &
                                      Q(path__not__contains='version') & Q(path__not__contains='__main__.py') &
                                      Q(path__not__contains='stub') & Q(path__not__contains='model.py') &
-                                     Q(path__not__contains='models.py') &
+                                     Q(path__not__contains='models.py') & Q(path__not__contains='model') &
                                      Q(path__not__contains='exception')).only('path', 'id').all()
 istqb_filter_ids = set([file.id for file in istqb_filter_files])
 istqb_filter_dict = {}
@@ -317,18 +320,17 @@ text = []
 commit_msg = []
 
 fieldnames = ['all', 'dev', 'istqb', 'ieee', 'use_mock', 'without_mock_istqb', 'without_mock_ieee', 'mock_cutoff_istqb',
-              'mock_cutoff_ieee', 'istqb_dev', 'ieee_dev', 'without_mock_istqb_dev', 'without_mock_ieee_dev',
-              'mock_cutoff_istqb_dev', 'mock_cutoff_ieee_dev', 'revision_hash']
+              'mock_cutoff_ieee', 'istqb_dev', 'ieee_dev', 'revision_hash']
 
 
 csv_file = None
-if not os.path.isfile(proj.name+'_raw_data.csv'):
-    csv_file = open(proj.name+'_raw_data.csv', 'w')
+if not os.path.isfile(os.path.join(os.path.dirname(__file__), 'data', proj.name+'_raw_data.csv')):
+    csv_file = open(os.path.join(os.path.dirname(__file__), 'data', proj.name+'_raw_data.csv'), 'w')
     writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
     writer.writeheader()
 
 
-
+test_state_count = 0
 for commit in commits:
     #print(commit.id)
     commit_msg.append(commit.message)
@@ -362,6 +364,9 @@ for commit in commits:
         non_mocked_dependencies_with_filter = non_mocked_dependencies & istqb_filter_ids
         mock_cutoff_with_filter = set(state.mock_cut_dep) & istqb_filter_ids
 
+        #print(','.join([file.path for file in File.objects(id__in=all_dependencies)]))
+        #print(','.join([file.path for file in File.objects(id__in=all_dependencies_with_filter)]))
+
         # But we filter out tests, that do not have any dependency (e.g., test data that starts with "test")
         if len(all_dependencies) > 0:
             all_tests += 1
@@ -371,7 +376,7 @@ for commit in commits:
 
         # Now we have a look, if developer think that the current file at the current commit is a unit test
         if state.file_id in file_ids_of_unit_tests:
-
+            test_state_count +=1
             dev += 1
 
             (have_same_package, package_name) = all_dep_have_same_package(all_dependencies_with_filter, istqb_filter_dict)
@@ -380,19 +385,6 @@ for commit in commits:
                 ieee_dev += 1
             if len(all_dependencies_with_filter) == 1:
                 istqb_dev += 1
-            if len(non_mocked_dependencies_with_filter) == 1:
-                without_mock_istqb_dev += 1
-            if len(mock_cutoff_with_filter) == 1:
-                mock_cutoff_istqb_dev += 1
-
-            # check if mock_cutoff or without_mock works for ieee definition
-            (have_same_package, package_name) = all_dep_have_same_package(non_mocked_dependencies_with_filter, istqb_filter_dict)
-            if have_same_package:
-                without_mock_ieee_dev += 1
-
-            (have_same_package, package_name) = all_dep_have_same_package(mock_cutoff_with_filter, istqb_filter_dict)
-            if have_same_package:
-                mock_cutoff_ieee_dev += 1
 
         # We look if (when we use the ieee definition of group of modules that are allowed for a unit test) we have
         # a unit test then
@@ -417,11 +409,11 @@ for commit in commits:
         # check if mock_cutoff or without_mock works for ieee definition
         (have_same_package, package_name) = all_dep_have_same_package(non_mocked_dependencies_with_filter, istqb_filter_dict)
         if have_same_package:
-            without_mock_ieee_dev += 1
+            without_mock_ieee += 1
 
         (have_same_package, package_name) = all_dep_have_same_package(mock_cutoff_with_filter, istqb_filter_dict)
         if have_same_package:
-            mock_cutoff_ieee_dev += 1
+            mock_cutoff_ieee += 1
 
     if all_tests == 0:
         print(commit.revisionHash)
@@ -450,13 +442,10 @@ for commit in commits:
             'mock_cutoff_ieee': mock_cutoff_ieee,
             'istqb_dev':istqb_dev,
             'ieee_dev':ieee_dev,
-            'without_mock_istqb_dev': without_mock_istqb_dev,
-            'without_mock_ieee_dev': without_mock_ieee_dev,
-            'mock_cutoff_istqb_dev':mock_cutoff_istqb_dev,
-            'mock_cutoff_ieee_dev': mock_cutoff_ieee_dev,
             'revision_hash': commit.revisionHash
         })
 
+print(test_state_count)
 pprint.pprint(file_paths)
 elapsed = timeit.default_timer() - start_time
 print('Needed %0.5f s' % elapsed)

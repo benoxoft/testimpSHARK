@@ -130,3 +130,44 @@ class Commit(Document):
 
     def __str__(self):
         return ""
+
+
+class Hunk(Document):
+    """ Document that inherits from :class:`mongoengine.Document`. Holds information for the hunk collection.
+    :property new_start: new starting of the hunk in new file
+    :property new_lines: number of new lines
+    :property old_start: old start of the hunk in the old file
+    :property old_lines: old number of lines
+    :property content: content of the hunk.
+
+    For more information: https://en.wikipedia.org/wiki/Diff#Unified_format)
+    """
+
+    new_start = IntField(required=True)
+    new_lines = IntField(required=True)
+    old_start = IntField(required=True)
+    old_lines = IntField(required=True)
+    content = StringField(required=True)
+
+
+class Tag(Document):
+    """ Document that inherits from :class:`mongoengine.Document`. Holds information for the tag collection.
+
+    :property projectId: id of the project, which belongs to the file action (type: :class:`mongoengine.fields.ObjectIdField`)
+    :property name: name of the tag (type: :class:`mongoengine.fields.StringField`)
+    :property message: message of the tag (type: :class:`mongoengine.fields.StringField`)
+    :property taggerId: id of the person who created the tag (type: :class:`mongoengine.fields.ObjectIdField`)
+    :property date: date of the creation of the tag (type: :class:`mongoengine.fields.DateTimeField`)
+    :property offset: offset of the tag creation date for timezones (type: :class:`mongoengine.fields.IntField`)
+
+    .. NOTE:: Unique (or primary key) are the fields: name and projectId.
+    """
+
+
+     #PK: project, name
+    projectId = ObjectIdField(required=True,unique_with=['name'] )#
+    name = StringField(max_length=150, required=True, unique_with=['projectId'])
+    message = StringField()
+    taggerId = ObjectIdField()
+    date = DateTimeField()
+    offset = IntField()

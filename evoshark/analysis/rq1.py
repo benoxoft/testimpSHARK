@@ -4,14 +4,24 @@ import csv
 import seaborn
 import matplotlib.pyplot as plt
 import collections
+import scipy
 import numpy
 from pandas import DataFrame
 
+def calculate_error_mean(dev_list, definition_list):
+    # Calculate error over all revisions
+    substracted_values = [a_i - b_i for a_i, b_i in zip(dev_list, definition_list)]
+
+    # Add them up
+    sum = 0
+    for value in substracted_values:
+        sum += value
+
+    # Calculate mean
+    return sum/float(len(dev_list))
+
 fieldnames = ['all', 'dev', 'istqb', 'ieee', 'use_mock', 'without_mock_istqb', 'without_mock_ieee', 'mock_cutoff_istqb',
-              'mock_cutoff_ieee', 'istqb_dev', 'ieee_dev', 'without_mock_istqb_dev', 'without_mock_ieee_dev',
-              'mock_cutoff_istqb_dev', 'mock_cutoff_ieee_dev', 'revision_hash']
-
-
+              'mock_cutoff_ieee', 'istqb_dev', 'ieee_dev', 'revision_hash']
 
 
 best = []
@@ -24,15 +34,18 @@ dev_unit_all = []
 dev_unit_dev = []
 
 
-# To get the complete number of states, we need to get the whole number of states that we are considering
-all_considered_states = []
+path_to_data_folder = os.path.join(os.path.dirname(__file__), 'data')
 
-files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('raw_data.csv')]
+files = [os.path.join(path_to_data_folder, f) for f in os.listdir(path_to_data_folder)
+         if os.path.isfile(os.path.join(path_to_data_folder, f)) and
+         os.path.join(path_to_data_folder, f).endswith('raw_data.csv')]
+
 boxplot_results = {
-        'type': [],
-        'value': [],
-        'project': []
+        'Type': [],
+        '#Tests': [],
+        'Project': []
 }
+
 for f in files:
     results = {
         'all': [],
@@ -46,8 +59,10 @@ for f in files:
 
     revision_hashes = []
     print(f)
+
     with open(f) as csvfile:
-        project = f.split('_')[0]
+        print(f)
+        project = f.split('/')[-1].split('_')[0]
         reader = csv.DictReader(csvfile, fieldnames=fieldnames)
         next(reader, None)  # skip the headers
         for row in reader:
@@ -56,12 +71,18 @@ for f in files:
                 revision_hashes.append(row['revision_hash'])
                 for field in results.keys():
                     results[field].append(int(row[field]))
-                for field in ['all', 'dev', 'istqb', 'ieee', 'istqb_dev', 'ieee_dev']:
-                    boxplot_results['type'].append(field)
-                    boxplot_results['value'].append(int(row[field]))
-                    boxplot_results['project'].append(project)
+                for field in ['dev', 'istqb_dev', 'ieee_dev']:
+                    if field == 'istqb_dev':
+                        boxplot_results['Type'].append('istqb')
+                    elif field == 'ieee_dev':
+                        boxplot_results['Type'].append('ieee')
+                    else:
+                        boxplot_results['Type'].append(field)
 
-        all_considered_states.extend(revision_hashes)
+                    boxplot_results['#Tests'].append(int(row[field]))
+                    boxplot_results['Project'].append(project)
+        print(calculate_error_mean(results['dev'], results['istqb_dev']))
+        print(calculate_error_mean(results['dev'], results['ieee_dev']))
 
         # matplotlib
         seaborn.set_style("darkgrid")
@@ -100,7 +121,7 @@ data_frame = DataFrame(data=boxplot_results)
 fig = plt.figure(1, figsize=(9, 6))
 
 # Create an axes instance
-ax = seaborn.boxplot(x="value", y="project", hue="type", data=data_frame)
+ax = seaborn.boxplot(x="Project", y="#Tests", hue="Type", data=data_frame)
 
 # Create the boxplot
 plt.show()
