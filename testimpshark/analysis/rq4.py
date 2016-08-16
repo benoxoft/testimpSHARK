@@ -7,35 +7,30 @@ import collections
 import numpy
 from pandas import DataFrame
 
+# Header of the CSV file
 fieldnames = ['all', 'dev', 'istqb', 'ieee', 'use_mock', 'without_mock_istqb', 'without_mock_ieee', 'mock_cutoff_istqb',
-              'mock_cutoff_ieee', 'istqb_dev', 'ieee_dev', 'without_mock_istqb_dev', 'without_mock_ieee_dev',
-              'mock_cutoff_istqb_dev', 'mock_cutoff_ieee_dev', 'revision_hash']
+              'mock_cutoff_ieee', 'revision_hash']
 
 
+path_to_data_folder = os.path.join(os.path.dirname(__file__), 'data')
 
+# Get all files
+files = [os.path.join(path_to_data_folder, f) for f in os.listdir(path_to_data_folder)
+         if os.path.isfile(os.path.join(path_to_data_folder, f)) and
+         os.path.join(path_to_data_folder, f).endswith('raw_data.csv')]
 
-best = []
-second_best = []
-dev = []
-use_mock = []
-mock_strict = []
-without_mock = []
-dev_unit_all = []
-dev_unit_dev = []
-
-
-# To get the complete number of states, we need to get the whole number of states that we are considering
-all_considered_states = []
-
-files = [f for f in os.listdir(os.path.join(os.path.dirname(__file__), 'data')) if os.path.isfile(f) and f.endswith('raw_data.csv')]
+# Initialization
 boxplot_results = {
         'type': [],
         'value': [],
         'project': []
 }
+
+# Plot for each file
 for f in files:
     results = {
         'all': [],
+        'dev': [],
         'istqb': [],
         'ieee': [],
     }
@@ -43,23 +38,26 @@ for f in files:
 
     revision_hashes = []
     print(f)
+
+
+    # Open CSV file and load data
     with open(f) as csvfile:
-        project = f.split('_')[0]
+        project = f.split('/')[-1].split('_')[0]
         reader = csv.DictReader(csvfile, fieldnames=fieldnames)
         next(reader, None)  # skip the headers
         for row in reader:
             revision_hashes.append(row['revision_hash'])
             for field in results.keys():
                 results[field].append(int(row[field]))
-            for field in ['all', 'istqb', 'ieee']:
+            for field in ['all', 'dev', 'istqb', 'ieee']:
                 boxplot_results['type'].append(field)
                 boxplot_results['value'].append(int(row[field]))
                 boxplot_results['project'].append(project)
 
-        all_considered_states.extend(revision_hashes)
 
-        # matplotlib
+        # Plot commits against dev, istqb, all, and ieee categories
         seaborn.set_style("darkgrid")
+        seaborn.set_context("notebook", font_scale=1.5)
         fig = plt.figure(figsize=(15, 10), dpi=100)
         ax = plt.subplot(111)
 

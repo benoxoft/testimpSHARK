@@ -9,7 +9,7 @@ from string import Template
 
 from dataprocessor.configuration import Configuration
 from dataprocessor.repository import Repository
-from evoshark.common import setup_logging
+from testimpshark.common import setup_logging
 
 
 def writable_dir(prospective_dir):
@@ -27,6 +27,17 @@ def writable_dir(prospective_dir):
 
 
 def execute(config, logger, revision, path_to_revision_dump):
+    """
+    We need this wrapper, as projects can be written in different python versions. Therefore, the correct python call
+    must be made, as the modulefinder library is not working otherwise
+
+
+    :param config: execution config
+    :param logger: logger factory
+    :param revision: revision that is processed
+    :param path_to_revision_dump: path to the revision
+    :return:
+    """
     orig_command = '$python %s -u %s -out %s -U %s -P %s -DB %s -H %s -p %s -a %s -r %s -i %s' % \
                   (os.path.dirname(__file__)+"/main.py", config.url, config.output_dir, config.db_user,
                    config.db_password, config.db_database, config.db_hostname, config.db_port, config.db_auth,

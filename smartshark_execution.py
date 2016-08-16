@@ -11,7 +11,7 @@ from string import Template
 
 from dataprocessor.configuration import Configuration
 from dataprocessor.repository import Repository
-from evoshark.common import setup_logging
+from testimpshark.common import setup_logging
 
 
 def writable_dir(prospective_dir):

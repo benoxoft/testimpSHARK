@@ -20,7 +20,7 @@ from .mongomodel import File, Project, Commit, TestState
 from .common import get_all_immidiate_folders, setup_logging
 
 
-class EvoSHARK(object):
+class TestImpSHARK(object):
 
     def __init__(self, output, url, db_database, db_hostname, db_port, db_auth, db_user, db_password, mock_paths):
         """
@@ -46,6 +46,11 @@ class EvoSHARK(object):
 
     @staticmethod
     def sanitize_path(path):
+        """
+        Sanitize the path (~ is replaced with the whole path)
+        :param path: path to sanitize
+        :return: sanitized path
+        """
         home_folder = os.path.expanduser('~')+"/"
 
         if path.endswith('/'):
@@ -55,6 +60,12 @@ class EvoSHARK(object):
 
     @staticmethod
     def sanitize_name(path, input_path):
+        """
+        Sanitizes the name (replace the input path)
+        :param path: path that should be sanitized
+        :param input_path: input path that should be replaced
+        :return: sanitized name
+        """
         return path.replace(input_path+"/", "")
 
     def get_project_id(self, url):
@@ -83,15 +94,23 @@ class EvoSHARK(object):
             self.logger.error("Commit with project_id %s and revision %s does not exist" % (project_id, revision_hash))
             sys.exit(1)
 
-    def find_stored_files(self, input_path):
-        # get all stored files of the project
+    def find_stored_files(self):
+        """
+        Gets all stored files of the project, with their path and file id in the mongodb
+        :return: dictionary with files[path] = objectid
+        """
         stored_files = {}
-        for file in File.objects(projectId=self.project_id):
+        for file in File.objects(projectId=self.project_id).only('path', 'id'):
             stored_files[file.path] = file.id
 
         return stored_files
 
     def get_all_files_in_current_revision(self, input_path):
+        """
+        Get all files in the current revision, exclude git repository.
+        :param input_path: where to look for files
+        :return: list of all files, that are available in the current revision
+        """
         input_files = []
         for root, dirs, files in os.walk(input_path, topdown=True):
             for name in files:
@@ -103,9 +122,15 @@ class EvoSHARK(object):
 
         return input_files
 
-
-
     def filter_files_list(self, files):
+        """
+        Filters the files list, so that it only includes tests.
+        We only include files, that start with test (or tests, Test, Tests) or end with test.py (tests.py,
+        Test.py, Tests.py).
+
+        :param files: files to be filtered
+        :return: filtered list of files
+        """
         starting_with_test = fnmatch.filter(files, 'test*')
         starting_with_Test = fnmatch.filter(files, 'Test*')
 
@@ -118,6 +143,17 @@ class EvoSHARK(object):
         return starting_list+ending_with_test+ending_with_tests+ending_with_Test
 
     def process_revision(self, revision, input_path):
+        """
+        Main function. We process the revision and do the following steps:
+        1) detect tests
+        2) find imports (direct, mocked, recursive)
+        3) find mock-cutoff imports
+        4) store data
+
+        :param revision: hash of the revision that is processed
+        :param input_path: input path of the revision
+        :return:
+        """
         self.logger.info("Processing revision %s" % revision)
 
         commit_id = self.get_commit_id(self.project_id, revision)
@@ -126,6 +162,7 @@ class EvoSHARK(object):
         folders = get_all_immidiate_folders(input_path)
         current_files = self.get_all_files_in_current_revision(input_path)
 
+        # Set search paths correctly (ignore standard libraries)
         path_for_search = [input_path]
         path_for_search.extend(self.mock_paths)
 
@@ -137,6 +174,8 @@ class EvoSHARK(object):
         start_time = timeit.default_timer()
         python_version_error = False
         for root, dirs, files in os.walk(input_path):
+
+            # Go through all detected tests
             for file_name in self.filter_files_list(files):
                 test_file = os.path.join(root, file_name)
                 path_parts = root.split('/')
@@ -155,8 +194,9 @@ class EvoSHARK(object):
 
                 self.logger.info("Found test %s" % self.sanitize_name(test_file, input_path))
                 finder = ModuleFinder(path_for_search)
-
                 new_finder = NewModuleFinder(path_for_search)
+
+                # Datect direct imports, recursive imports and mocked modules
                 try:
                     dep_modules, direct_imports, uses_mock, mocked_modules = self.get_dep_modules(finder, new_finder,
                                                                                                   test_file,
@@ -169,6 +209,7 @@ class EvoSHARK(object):
                     self.logger.error("Import path too deep for file %s" % file_name)
                     error = True
 
+                # If we have mocked modules, get the mock-cutoff imports
                 if len(mocked_modules) > 0:
                     try:
                         graph = ModuleGraph(path_for_search)
@@ -185,6 +226,7 @@ class EvoSHARK(object):
                         self.logger.error("Import path too deep for file %s" % file_name)
                         error = True
 
+                # Finally, store data in mongodb
                 self.store_data_in_mongodb(test_file, stored_files, input_path, commit_id,
                                            dep_modules, direct_imports, error, uses_mock, mocked_modules,
                                            mock_cutoff_dependencies)
@@ -196,14 +238,33 @@ class EvoSHARK(object):
             sys.exit(1)
 
     def get_dependencies_with_mock_cutoff(self, graph, file, input_path, mocked_modules):
+        """
+        Gets mock-cutoff imports
+        :param graph: modulegraph that was generated
+        :param file: path of the test
+        :param input_path: input path of the project
+        :param mocked_modules: all mocked modules
+        :return: all mock-cutoff imports
+        """
         graph.run_script(file)
         node = graph.findNode(file)
         references = []
+
+        # Recursivly get all imports. If a node is mocked, stop there
         self.get_all_node_references(graph, node, references, mocked_modules, input_path)
         self.logger.debug("Dependencies with mock cutoff: %s" % [ref.identifier for ref in references])
         return references
 
     def get_all_node_references(self, graph, node, references, mocked_modules, input_path):
+        """
+        Gets all references of the given node in the graph
+        :param graph: modulegraph that was build from the project
+        :param node: node that is currently looked at
+        :param references: list of all references
+        :param mocked_modules: list of mocked modules
+        :param input_path: input path of the project
+        :return:
+        """
         if node is None:
             return
 
@@ -211,12 +272,28 @@ class EvoSHARK(object):
             if ref not in references and (isinstance(ref, SourceModule) or isinstance(ref, Package)) \
                     and ref.filename.startswith(input_path) and ref.identifier not in mocked_modules:
                 references.append(ref)
+                # Start recursion
                 self.get_all_node_references(graph, ref, references, mocked_modules, input_path)
 
     def store_data_in_mongodb(self, file, stored_files, input_path, commit_id, dep_modules, direct_imports, error,
                               uses_mock, mocked_modules, mock_cutoff_dependencies):
+        """
+        Store all acquired data in the mongodb
+        :param file: test file
+        :param stored_files: all files that are currently stored in the mongodb for this project
+        :param input_path: input path of the project
+        :param commit_id: objectid of the commit that is processed
+        :param dep_modules: recursivly detected imports
+        :param direct_imports: direct imports
+        :param error: was an error thrown
+        :param uses_mock: does the test use mocks
+        :param mocked_modules: all mocked modules
+        :param mock_cutoff_dependencies: all mock-cutoff imports
+        :return:
+        """
         file = self.sanitize_name(file, input_path)
 
+        # Exchange all module names/paths with the objectids of files, that are stored inthe mongodb
         depends_on = []
         for module in dep_modules:
             depends_on.append(stored_files[self.sanitize_name(module.__file__, input_path)])
@@ -252,13 +329,13 @@ class EvoSHARK(object):
 
     def get_dep_modules(self, finder, graph, file, input_path, current_files):
         """
-        We make several assumptions:
-        1) We exclude the __init__.py of the different packages for calculating if it is a unit test or not
+        Get all imports of the test recursivly
 
-        :param graph:
-        :param file:
-        :param folders:
-        :param tests_path:
+        :param finder: modulefinder instance
+        :param graph: NEW modulefinder instance, that only looks at direct imports
+        :param file: test file
+        :param input_path: path to the project
+        :param current_files: all files, that are currently in the project
         :return:
         """
 
@@ -271,6 +348,8 @@ class EvoSHARK(object):
         uses_mock = False
         mocked_modules = []
         for name, mod in finder.modules.items():
+
+            # Check if mocks are used
             if 'mock' in name or 'unittest.mock' in name:
                 uses_mock = True
                 mocked_modules = self.get_what_is_mocked(file, input_path, current_files)
@@ -286,6 +365,15 @@ class EvoSHARK(object):
         return modules, direct_imports, uses_mock, mocked_modules
 
     def get_what_is_mocked(self, file, input_path, current_files):
+        """
+        Detect all mocked modules
+
+
+        :param file: test file
+        :param input_path: path to the project
+        :param current_files: all files of the project in the current revision
+        :return:
+        """
         mocked_modules = set()
         mocked_classes = set()
 
@@ -343,6 +431,11 @@ class EvoSHARK(object):
         return mocked_modules
 
     def preprocess_file_for_import_detection(self, contents):
+        """
+        Preprocess file for the import detection for the mocks
+        :param contents: file contents
+        :return:
+        """
         new_contents = []
         for i in range(len(contents)):
             new_line = ""
@@ -361,6 +454,15 @@ class EvoSHARK(object):
         return new_contents
 
     def get_correct_module(self, module_string, file, input_path, current_files):
+        """
+        Get the correct module, based on the module string
+
+        :param module_string: string of the module
+        :param file: test file
+        :param input_path: path to the project
+        :param current_files: current files of the project
+        :return:
+        """
         parts = module_string.split('.')
 
         # Filter empty strings from list
@@ -394,6 +496,14 @@ class EvoSHARK(object):
                     return Module(name=module_identifier, file=item)
 
     def get_direct_imports(self, graph, file, input_path):
+        """
+        Get direct imports of the file
+
+        :param graph: NEW modulefinder instance
+        :param file: test file
+        :param input_path: path to the project
+        :return:
+        """
         modules = []
         graph.run_script(file)
         for name, mod in graph.modules.items():

@@ -4,10 +4,11 @@ import random
 import sys
 from mongoengine import connect, Q
 
-from evoshark.mongomodel import Project, Commit, File, TestState
+from testimpshark.mongomodel import Project, Commit, File, TestState
 
 
 def get_unit_test_developer_think_are_unit(project):
+    # Filter to find unit tests
     dep_files_unit = File.objects(Q(projectId=project.id) &
                                   Q(path__not__contains='__init__.py') &
                                   Q(name__icontains='test') & Q(path__endswith='.py') &
@@ -64,25 +65,28 @@ def all_dep_have_same_package(all_dependencies, file_dict):
 
     return True, item
 
+# Connect to the database
 connect('smartshark', host='141.5.100.156', port=27017, authentication_source='admin', username='root',
         password='balla1234$')
 
+# Initializations
+num_istqb = 0
+num_ieee = 0
+num_other = 0
+
 results = []
+state_ids = []
 
 pipeline = [
-        {'$sample': {'size' : 1}}
+        {'$sample': {'size': 1}}
     ]
 
+# We need to draw 290 different states overall
+while len(results) < 290:
+    print('Num istqb: %d, num ieee: %d, num other: %d' % (num_istqb, num_ieee, num_other))
 
-states = TestState.objects(error=True).all()
-errors = 0
-for state in states:
-
-#while len(results) < 93:
-
-    '''
-    state_result = {}
     # draw random state
+    state_result = {}
     state = list(TestState.objects().aggregate(*pipeline))
     state = TestState(id=state[0]['_id'], file_id=state[0]['file_id'], commit_id=state[0]['commit_id'],
                       long_name=state[0]['long_name'], depends_on=state[0]['depends_on'], direct_imp=state[0]['direct_imp'],
@@ -93,10 +97,9 @@ for state in states:
     state_result['mock_cut_dep'] = [file.path for file in File.objects(id__in=state.mock_cut_dep)]
     state_result['mocked_modules'] = [file.path for file in File.objects(id__in=state.mocked_modules)]
 
+
     # result variable initalization
     dev = 0
-    ieee_dev = 0
-    istqb_dev = 0
     ieee = 0
     istqb = 0
     use_mock = 0
@@ -104,7 +107,6 @@ for state in states:
     mock_cutoff_istqb = 0
     without_mock_ieee = 0
     mock_cutoff_ieee = 0
-    '''
 
     commit_of_state = Commit.objects(id=state.commit_id).only('revisionHash', 'id', 'projectId', 'branches').get()
     proj = Project.objects(id=commit_of_state.projectId).get()
@@ -113,7 +115,7 @@ for state in states:
     print(commit_of_state.branches)
 
 
-    # make sure we only get samples from the main branch of the projects
+    # make sure we only get samples from the main branch of the projects, as we have only analyzed them
     if proj.url == "https://github.com/ansible/ansible" and 'refs/heads/devel' not in commit_of_state.branches:
         continue
 
@@ -123,9 +125,8 @@ for state in states:
     if proj.url not in ["https://github.com/ansible/ansible", "https://github.com/aws/aws-cli"] and\
                     'refs/heads/master' not in commit_of_state.branches:
         continue
-    errors+=1
 
-    '''
+    # Use our filter
     istqb_filter_files = File.objects(Q(projectId=proj.id) & Q(path__not__contains='__init__.py') &
                                      Q(path__not__contains='test') & Q(path__not__contains='util') &
                                      Q(path__not__contains='const') & Q(path__not__contains='backwardcomp') &
@@ -148,8 +149,6 @@ for state in states:
     else:
         file_ids_of_unit_tests = get_unit_test_developer_think_are_unit(proj)
 
-
-
     # Initialize dependency variables
     all_dependencies = set(state.depends_on + state.direct_imp)
     all_dependencies_with_filter = all_dependencies & istqb_filter_ids
@@ -167,12 +166,6 @@ for state in states:
         dev += 1
 
         (have_same_package, package_name) = all_dep_have_same_package(all_dependencies_with_filter, istqb_filter_dict)
-
-        if have_same_package:
-            ieee_dev += 1
-        if len(all_dependencies_with_filter) == 1:
-            istqb_dev += 1
-
     # We look if (when we use the ieee definition of group of modules that are allowed for a unit test) we have
     # a unit test then
     (have_same_package, package_name) = all_dep_have_same_package(all_dependencies_with_filter, istqb_filter_dict)
@@ -202,13 +195,12 @@ for state in states:
     if have_same_package:
         mock_cutoff_ieee += 1
 
+    # Add result
     state_result['id'] = state.id
     state_result['name'] = state.long_name
     state_result['revisionHash'] = commit_of_state.revisionHash
     state_result['project'] = proj.url
     state_result['dev'] = dev
-    state_result['ieee_dev'] = ieee_dev
-    state_result['istqb_dev'] = istqb_dev
     state_result['ieee'] = ieee
     state_result['istqb'] = istqb
     state_result['without_mock_istqb'] = without_mock_istqb
@@ -216,7 +208,21 @@ for state in states:
     state_result['mock_cutoff_istqb'] = mock_cutoff_istqb
     state_result['mock_cutoff_ieee'] = mock_cutoff_ieee
 
-    results.append(state_result)
-    '''
-print(errors)
+    # Check if we have enough for the different stratas
+    if istqb == 1 and num_istqb < 96 and state.id not in state_ids:
+        num_istqb += 1
+        state_ids.append(state.id)
+        results.append(state_result)
+    elif ieee == 1 and num_ieee < 97and state.id not in state_ids:
+        num_ieee += 1
+        state_ids.append(state.id)
+        results.append(state_result)
+    elif istqb == 0 and ieee == 0 and num_other < 97 and state.id not in state_ids:
+        num_other += 1
+        state_ids.append(state.id)
+        results.append(state_result)
+
+print(num_istqb)
+print(num_ieee)
+print(num_other)
 pprint.pprint(results)

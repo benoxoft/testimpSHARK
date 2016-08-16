@@ -5,8 +5,8 @@ import os
 import sys
 
 
-from evoshark.common import setup_logging, get_all_immidiate_folders
-from evoshark.evoshark import EvoSHARK
+from testimpshark.common import setup_logging, get_all_immidiate_folders
+from testimpshark.evoshark import EvoSHARK
 
 
 def writable_dir(prospective_dir):

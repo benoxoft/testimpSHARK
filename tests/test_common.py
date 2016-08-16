@@ -1,7 +1,7 @@
 import unittest
 import os
 
-from evoshark.common import get_all_immidiate_folders
+from testimpshark.common import get_all_immidiate_folders
 
 
 class CommonTest(unittest.TestCase):

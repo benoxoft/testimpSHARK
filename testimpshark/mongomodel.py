@@ -33,10 +33,24 @@ class File(Document):
 
 
 class TestState(Document):
+    """ Document that inherits from :class:`mongoengine.Document`. Holds information for the test_state collection.
+
+    :property file_id: id of the test, that we analyzed (type: :class:`mongoengine.fields.ObjectIdField`)
+    :property commit_id: id of the commit, we analyzed (type: :class:`mongoengine.fields.ObjectIdField`)
+    :property long_name: name of the file (type: :class:`mongoengine.fields.StringField`)
+    :property file_type: type of the file (type: :class:`mongoengine.fields.StringField`)
+    :property depends_on: file ids of dependencies of the test (recursive) (type: :class:`mongoengine.fields.ListField(:class:`mongoengine.fields.ObjectIdField`))
+    :property direct_imp: file ids of direct dependencies of the test (type: :class:`mongoengine.fields.ListField(:class:`mongoengine.fields.ObjectIdField`))
+    :property mock_cut_dep: file ids of the mock_cutoff_dependencies (type: :class:`mongoengine.fields.ListField(:class:`mongoengine.fields.ObjectIdField`))
+    :property mocked_modules: file ids of the mocked modules (type: :class:`mongoengine.fields.ListField(:class:`mongoengine.fields.ObjectIdField`))
+    :property uses_mock: is true, if the file at this commit uses mocks (type: :class:`mongoengine.fields.BooleanField`)
+    :property error: is true if there was an error with mining this file at this commit (type: :class:`mongoengine.fields.BooleanField`)
+
+    .. NOTE:: Unique (or primary key) are the fields: file_id, commit_id, and long_name.
+    """
     file_id = ObjectIdField(required=True,unique_with=['commit_id', 'long_name'])
     commit_id = ObjectIdField(required=True, unique_with=['file_id', 'long_name'])
     long_name = StringField(required=True, unique_with=['file_id', 'commit_id'])
-    name = StringField()
     file_type = StringField()
     depends_on = ListField(ObjectIdField())
     direct_imp = ListField(ObjectIdField())
@@ -44,12 +58,6 @@ class TestState(Document):
     mocked_modules = ListField(ObjectIdField())
     uses_mock = BooleanField()
     error = BooleanField()
-
-
-class Result(Document):
-    file_id = ObjectIdField(required=True, unique_with=['commit_id'])
-    commit_id = ObjectIdField(required=True, unique_with=['file_id'])
-    strict_unit = BooleanField()
 
 
 class FileAction(Document):
