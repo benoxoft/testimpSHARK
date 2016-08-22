@@ -57,7 +57,9 @@ for f in files:
 
         # Plot commits against dev, istqb, all, and ieee categories
         seaborn.set_style("darkgrid")
-        seaborn.set_context("notebook", font_scale=1.5)
+        color_blind_and_printer_friendly = ["#2b8cbe", "#7bccc4", "#bae4bc", "#f0f9e8"]
+        seaborn.set_palette(seaborn.color_palette(color_blind_and_printer_friendly))
+        seaborn.set_context("notebook", font_scale=1.3)
         fig = plt.figure(figsize=(15, 10), dpi=100)
         ax = plt.subplot(111)
 
@@ -70,14 +72,7 @@ for f in files:
         plt.xlabel('Commit')
         plt.ylabel('#Tests')
 
-        # Shrink current axis's height by 10% on the bottom
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0 + box.height * 0.05,
-                         box.width, box.height * 0.95])
-
-        # Put a legend below current axis
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-                  fancybox=True, shadow=True, ncol=5)
+        ax.legend(loc='best', title='Category')
 
         # Put an event on it
         def onpick3(event):

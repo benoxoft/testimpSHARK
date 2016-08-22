@@ -19,7 +19,7 @@ files = sorted(files)
 files[2], files[3] = files[3], files[2]
 
 boxplot_results = {
-        'Type': [],
+        'Category': [],
         '#Tests in Category': [],
         'Project': []
 }
@@ -34,22 +34,24 @@ for f in files:
             if int(row['dev']) > 0:
                 for field in ['dev', 'istqb_dev', 'ieee_dev']:
                     if field == 'istqb_dev':
-                        boxplot_results['Type'].append('istqbD')
+                        boxplot_results['Category'].append('istqbD')
                     elif field == 'ieee_dev':
-                        boxplot_results['Type'].append('ieeeD')
+                        boxplot_results['Category'].append('ieeeD')
                     else:
-                        boxplot_results['Type'].append(field)
+                        boxplot_results['Category'].append(field)
                     boxplot_results['#Tests in Category'].append(int(row[field]))
                     boxplot_results['Project'].append(project)
 
 seaborn.set_style("darkgrid")
+color_blind_and_printer_friendly = ["#2b8cbe", "#7bccc4", "#bae4bc", "#f0f9e8"]
+seaborn.set_palette(seaborn.color_palette(color_blind_and_printer_friendly))
 seaborn.set_context("notebook", font_scale=1.5)
 # Boxplot
 data_frame = DataFrame(data=boxplot_results)
 fig = plt.figure(1, figsize=(9, 6))
 
 # Create an axes instance
-ax = seaborn.boxplot(x="Project", y="#Tests in Category", hue="Type", data=data_frame)
+ax = seaborn.boxplot(x="Project", y="#Tests in Category", hue="Category", data=data_frame)
 
 # Create the boxplot
 plt.show()
