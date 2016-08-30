@@ -27,3 +27,7 @@ nrow(data_where_dev[data_where_dev[, "difference_ieee"] <= 5,])
 mean(data_where_dev$difference_istqb)
 mean(data_where_dev$difference_ieee)
 
+# Calculate percentage
+mean((data_where_dev$istqb_dev*100)/data_where_dev$dev)
+mean((data_where_dev$ieee_dev*100)/data_where_dev$dev)
+

@@ -59,7 +59,7 @@ for f in files:
         seaborn.set_style("darkgrid")
         color_blind_and_printer_friendly = ["#2b8cbe", "#7bccc4", "#bae4bc", "#f0f9e8"]
         seaborn.set_palette(seaborn.color_palette(color_blind_and_printer_friendly))
-        seaborn.set_context("notebook", font_scale=1.3)
+        seaborn.set_context("notebook", font_scale=1.8)
         fig = plt.figure(figsize=(15, 10), dpi=100)
         ax = plt.subplot(111)
 
@@ -69,7 +69,7 @@ for f in files:
             ax.plot(list(range(0, len(next(iter(results.values()))))), values, '-o', label=res_name, picker=True)
 
         plt.xlim(0)
-        plt.xlabel('Commit')
+        plt.xlabel('Revision')
         plt.ylabel('#Tests')
 
         ax.legend(loc='best', title='Category')
