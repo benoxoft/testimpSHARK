@@ -9,12 +9,14 @@
             },
             {  
                "type":"ObjectIdType",
-               "logical_type":"OID",
+               "logical_type":"RID",
+               "reference_to": "file",
                "field_name":"file_id"
             },
             {  
                "type":"ObjectIdType",
-               "logical_type":"OID",
+               "logical_type":"RID",
+               "reference_to": "commit",
                "field_name":"commit_id"
             },
             {  
@@ -40,25 +42,29 @@
             {  
                "sub_type": "ObjectIdType",
                "type":"ArrayType",
-               "logical_type":"ProductMetric",
+               "logical_type":"RID",
+               "reference_to": "file",
                "field_name":"depends_on"
             },
             {  
                "sub_type": "ObjectIdType",
                "type":"ArrayType",
-               "logical_type":"ProductMetric",
+               "logical_type":"RID",
+               "reference_to": "file",
                "field_name":"direct_imp"
             },
             {  
                "sub_type": "ObjectIdType",
                "type":"ArrayType",
-               "logical_type":"ProductMetric",
+               "logical_type":"RID",
+               "reference_to": "file",
                "field_name":"mock_cut_dep"
             },
             {  
                "sub_type": "ObjectIdType",
                "type":"ArrayType",
-               "logical_type":"ProductMetric",
+               "logical_type":"RID",
+               "reference_to": "file",
                "field_name":"mocked_modules"
             }
          ],
